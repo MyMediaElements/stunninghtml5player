@@ -1,365 +1,202 @@
 /* 
 Stunning HTML5 Player for Audio Streaming
-Author:Junaid Khalid
-URL:https://www.mymediaelements.com
+AUTHOR: Junaid Khalid
+URL: https://www.mymediaelements.com
 */
-class MediaPlayer {
-	constructor(player, options) {
-		this.player = player;
-		this.progress = 0;
 
-		/* defaults */
-		this.volumeControls = true;
-		this.seekControls = true;
-	}
 
-	render(options) {
-		if (options) {
-			this.extend(options);
-		}
+;(function( $, window, document, undefined )
+{
+	var isTouch		  = 'ontouchstart' in window,
+		eStart		  = isTouch ? 'touchstart'	: 'mousedown',
+		eMove		  = isTouch ? 'touchmove'	: 'mousemove',
+		eEnd		  = isTouch ? 'touchend'	: 'mouseup',
+		eCancel		  = isTouch ? 'touchcancel'	: 'mouseup',
+		secondsToTime = function( secs )
+		{
+			var hours = Math.floor( secs / 3600 ), minutes = Math.floor( secs % 3600 / 60 ), seconds = Math.ceil( secs % 3600 % 60 );
+			return ( hours == 0 ? '' : hours > 0 && hours.toString().length < 2 ? '0'+hours+':' : hours+':' ) + ( minutes.toString().length < 2 ? '0'+minutes : minutes ) + ':' + ( seconds.toString().length < 2 ? '0'+seconds : seconds );
+		},
+		canPlayType	  = function( file )
+		{
+			var audioElement = document.createElement( 'audio' );
+			return !!( audioElement.canPlayType && audioElement.canPlayType( 'audio/' + file.split( '.' ).pop().toLowerCase() + ';' ).replace( /no/, '' ) );
+		};
 
-		if (this.player.controls) {
-			this.player.controls = false;
-		}
+	$.fn.audioPlayer = function( params )
+	{
+		var params		= $.extend( { classPrefix: 'audioplayer', strPlay: 'Play', strPause: 'Pause', strVolume: 'Volume' }, params ),
+			cssClass	= {},
+			cssClassSub =
+			{
+				playPause:	 	'playpause',
+				playing:		'playing',
+				time:		 	'time',
+				timeCurrent:	'time-current',
+				timeDuration: 	'time-duration',
+				bar: 			'bar',
+				barLoaded:		'bar-loaded',
+				barPlayed:		'bar-played',
+				volume:		 	'volume',
+				volumeButton: 	'volume-button',
+				volumeAdjust: 	'volume-adjust',
+				noVolume: 		'novolume',
+				mute: 			'mute',
+				mini: 			'mini'
+			};
 
-		this.container = this.createElement('div', {
-			class: 'playr'
-		});
+		for( var subName in cssClassSub )
+			cssClass[ subName ] = params.classPrefix + '-' + cssClassSub[ subName ];
 
-		this.player.parentNode.insertBefore(this.container, this.player);
-		this.container.appendChild(this.player);
+		this.each( function()
+		{
+			if( $( this ).prop( 'tagName' ).toLowerCase() != 'audio' )
+				return false;
 
-		this.initPlayer();
-		this.createUI();
-		this.attachHandlers();
-		this.setVolume(50);
-	}
+			var $this	   = $( this ),
+				audioFile  = $this.attr( 'src' ),
+				isAutoPlay = $this.get( 0 ).getAttribute( 'autoplay' ), isAutoPlay = isAutoPlay === '' || isAutoPlay === 'autoplay' ? true : false,
+				isLoop	   = $this.get( 0 ).getAttribute( 'loop' ),		isLoop	   = isLoop		=== '' || isLoop	 === 'loop'		? true : false,
+				isSupport  = false;
 
-	initPlayer() {
-		if (this.player.controls) {
-			this.player.controls = false;
-		}
-		this.fileName = decodeURIComponent(this.player.src.split('/').pop());
-		this.player.load();
-	}
-
-	setDimensions() {
-		var _scope = this;
-		_scope.uiRect = _scope.container.getBoundingClientRect();
-		_scope.barRect = _scope.progressBar.getBoundingClientRect();
-
-		if (_scope.uiRect.width < 620) {
-			_scope.container.classList.add('compact');
-		} else {
-			_scope.container.classList.remove('compact');
-		}
-
-		if (_scope.volumeControls) {
-			_scope.volRect = _scope.volumeBar.getBoundingClientRect();
-		}
-
-		_scope.barLeft = _scope.progressBar.offsetLeft;
-		_scope.barWidth = _scope.progressBar.offsetWidth;
-
-		var offsetWidth = _scope.titleBox.offsetWidth;
-		var scrollWidth = _scope.titleBox.scrollWidth;
-
-	if (scrollWidth > offsetWidth) {
-		_scope.titleBox.classList.add('overflow');
-		_scope.titleBox.innerHTML = '<span>' + _scope.fileName + '</span><span>' + _scope.fileName + '</span>';
-	} else {
-		_scope.titleBox.classList.remove('overflow');
-		_scope.titleBox.innerHTML = '<span>' + _scope.fileName + '</span>';
-	}
-	}
-
-	attachHandlers() {
-		var _scope = this;
-		this.seeking = false;
-		this.dragging = false;
-
-		/* Play */
-		this.playButton.addEventListener('click', this.play.bind(this));
-		this.player.addEventListener('ended', this.reset.bind(this));
-
-		/* Progress */
-		this.player.addEventListener("timeupdate", this.updateProgress.bind(this), false);
-		this.player.addEventListener("loadedmetadata", this.updateProgress.bind(this), false);
-
-		/* Seek */
-		this.progressBar.parentNode.addEventListener("mousedown", function(event) {
-			_scope.seeking = true;
-			_scope.seek(event);
-		}, false);
-		window.addEventListener("mousemove", this.seek.bind(this), false);
-
-		/* Other */
-		window.addEventListener("mouseup", this.mouseUp.bind(this), false);
-
-		/* Resize */
-		var timeout = null;
-		window.addEventListener('resize', function(event) {
-			/* debounce */
-			clearTimeout(timeout);
-			timeout = setTimeout(function() {
-				_scope.setDimensions();
-			}, 250);
-		}, false);
-	}
-
-	mouseUp(event) {
-		if (this.dragging) {
-			this.volX = event.clientX - this.volRect.left;
-			if (this.volX >= this.volRect.width) {
-				this.volX = this.volRect.width;
-			} else if (this.volX <= 0) {
-				this.volX = 0;
+			if( typeof audioFile === 'undefined' )
+			{
+				$this.find( 'source' ).each( function()
+				{
+					audioFile = $( this ).attr( 'src' );
+					if( typeof audioFile !== 'undefined' && canPlayType( audioFile ) )
+					{
+						isSupport = true;
+						return false;
+					}
+				});
 			}
-			this.dragging = false;
-		}
-		if (this.seeking) {
-			if (this.wasPlaying) {
-				this.play();
-				this.wasPlaying = false;
+			else if( canPlayType( audioFile ) ) isSupport = true;
+
+			var thePlayer = $( '<div class="' + params.classPrefix + '">' + ( isSupport ? $( '<div>' ).append( $this.eq( 0 ).clone() ).html() : '<embed src="' + audioFile + '" width="0" height="0" volume="100" autostart="' + isAutoPlay.toString() +'" loop="' + isLoop.toString() + '" />' ) + '<div class="' + cssClass.playPause + '" title="' + params.strPlay + '"><a href="#">' + params.strPlay + '</a></div></div>' ),
+				theAudio  = isSupport ? thePlayer.find( 'audio' ) : thePlayer.find( 'embed' ), theAudio = theAudio.get( 0 );
+
+			if( isSupport )
+			{
+				thePlayer.find( 'audio' ).css( { 'width': 0, 'height': 0, 'visibility': 'hidden' } );
+				thePlayer.append( '<div class="' + cssClass.time + ' ' + cssClass.timeCurrent + '"></div><div class="' + cssClass.bar + '"><div class="' + cssClass.barLoaded + '"></div><div class="' + cssClass.barPlayed + '"></div></div><div class="' + cssClass.time + ' ' + cssClass.timeDuration + '"></div><div class="' + cssClass.volume + '"><div class="' + cssClass.volumeButton + '" title="' + params.strVolume + '"><a href="#">' + params.strVolume + '</a></div><div class="' + cssClass.volumeAdjust + '"><div><div></div></div></div></div>' );
+
+				var theBar			  = thePlayer.find( '.' + cssClass.bar ),
+					barPlayed	 	  = thePlayer.find( '.' + cssClass.barPlayed ),
+					barLoaded	 	  = thePlayer.find( '.' + cssClass.barLoaded ),
+					timeCurrent		  = thePlayer.find( '.' + cssClass.timeCurrent ),
+					timeDuration	  = thePlayer.find( '.' + cssClass.timeDuration ),
+					volumeButton	  = thePlayer.find( '.' + cssClass.volumeButton ),
+					volumeAdjuster	  = thePlayer.find( '.' + cssClass.volumeAdjust + ' > div' ),
+					volumeDefault	  = 0,
+					adjustCurrentTime = function( e )
+					{
+						theRealEvent		 = isTouch ? e.originalEvent.touches[ 0 ] : e;
+						theAudio.currentTime = Math.round( ( theAudio.duration * ( theRealEvent.pageX - theBar.offset().left ) ) / theBar.width() );
+					},
+					adjustVolume = function( e )
+					{
+						theRealEvent	= isTouch ? e.originalEvent.touches[ 0 ] : e;
+						theAudio.volume = Math.abs( ( theRealEvent.pageY - ( volumeAdjuster.offset().top + volumeAdjuster.height() ) ) / volumeAdjuster.height() );
+					},
+					updateLoadBar = setInterval( function()
+					{
+						barLoaded.width( ( theAudio.buffered.end( 0 ) / theAudio.duration ) * 100 + '%' );
+						if( theAudio.buffered.end( 0 ) >= theAudio.duration )
+							clearInterval( updateLoadBar );
+					}, 100 );
+
+				var volumeTestDefault = theAudio.volume, volumeTestValue = theAudio.volume = 0.111;
+				if( Math.round( theAudio.volume * 1000 ) / 1000 == volumeTestValue ) theAudio.volume = volumeTestDefault;
+				else thePlayer.addClass( cssClass.noVolume );
+
+				timeDuration.html( '&hellip;' );
+				timeCurrent.text( secondsToTime( 0 ) );
+
+				theAudio.addEventListener( 'loadeddata', function()
+				{
+					timeDuration.text( secondsToTime( theAudio.duration ) );
+					volumeAdjuster.find( 'div' ).height( theAudio.volume * 100 + '%' );
+					volumeDefault = theAudio.volume;
+				});
+
+				theAudio.addEventListener( 'timeupdate', function()
+				{
+					timeCurrent.text( secondsToTime( theAudio.currentTime ) );
+					barPlayed.width( ( theAudio.currentTime / theAudio.duration ) * 100 + '%' );
+				});
+
+				theAudio.addEventListener( 'volumechange', function()
+				{
+					volumeAdjuster.find( 'div' ).height( theAudio.volume * 100 + '%' );
+					if( theAudio.volume > 0 && thePlayer.hasClass( cssClass.mute ) ) thePlayer.removeClass( cssClass.mute );
+					if( theAudio.volume <= 0 && !thePlayer.hasClass( cssClass.mute ) ) thePlayer.addClass( cssClass.mute );
+				});
+
+				theAudio.addEventListener( 'ended', function()
+				{
+					thePlayer.removeClass( cssClass.playing );
+				});
+
+				theBar.on( eStart, function( e )
+				{
+					adjustCurrentTime( e );
+					theBar.on( eMove, function( e ) { adjustCurrentTime( e ); } );
+				})
+				.on( eCancel, function()
+				{
+					theBar.unbind( eMove );
+				});
+
+				volumeButton.on( 'click', function()
+				{
+					if( thePlayer.hasClass( cssClass.mute ) )
+					{
+						thePlayer.removeClass( cssClass.mute );
+						theAudio.volume = volumeDefault;
+					}
+					else
+					{
+						thePlayer.addClass( cssClass.mute );
+						volumeDefault = theAudio.volume;
+						theAudio.volume = 0;
+					}
+					return false;
+				});
+
+				volumeAdjuster.on( eStart, function( e )
+				{
+					adjustVolume( e );
+					volumeAdjuster.on( eMove, function( e ) { adjustVolume( e ); } );
+				})
+				.on( eCancel, function()
+				{
+					volumeAdjuster.unbind( eMove );
+				});
 			}
-			this.seeking = false;
-		}
-	}
+			else thePlayer.addClass( cssClass.mini );
 
-	play() {
-		var that = this;
-		if (!!this.player.paused) {
-			this.container.classList.add('playing');
-			this.container.classList.remove('paused');
-			this.player.play();
-		} else {
-			this.pause();
-		}
-	}
+			if( isAutoPlay ) thePlayer.addClass( cssClass.playing );
 
-	pause() {
-		if (this.player.paused) return;
-		this.container.classList.add('paused');
-		this.container.classList.remove('playing');
-		this.player.pause();
-	}
-
-	fastForward() {
-		this.player.currentTime += 5;
-	}
-
-	rewind() {
-		this.player.currentTime -= 5;
-	}
-
-	seek(event) {
-		if (!this.seeking) return;
-		if (!this.player.paused) {
-			this.wasPlaying = true;
-			this.pause();
-		}
-		var p = (event.clientX - this.barRect.left) / this.barWidth;
-		this.player.currentTime = this.player.duration * p;
-	}
-
-	seekTo(time) {
-		this.player.currentTime = time;
-	}
-
-	adjustVolume(event) {
-		if (!this.dragging) return;
-
-		var scale = (event.clientX - this.volRect.left) / this.volRect.width;
-		var vol = scale.toFixed(2);
-
-		if (vol >= 1) {
-			scale = vol = 1;
-		} else if (vol <= 0) {
-			scale = vol = 0;
-		}
-
-		this.player.volume = vol;
-		this.setStyle(this.volumeBar.firstElementChild, {
-			'transform': 'scale3d(' + scale + ',1,1)'
-		});
-	}
-
-	setVolume(level) {
-		level /= 100;
-		this.player.volume = level;
-
-		if (this.volumeControls) {
-			this.setStyle(this.volumeBar.firstElementChild, {
-				'transform': 'scale3d(' + level + ',1,1)'
-			});
-		}
-	}
-
-	updateProgress() {
-		let currentTime = Math.floor(this.player.currentTime);
-		let duration = Math.floor(this.player.duration);
-		this.progress = currentTime / duration;
-		this.setStyle(this.progressBar, {
-			'transform': 'scale3d(' + this.progress + ',1,1)'
-		});
-		this.durationBox.innerHTML = this.format(currentTime) + ' / ' + this.format(duration);
-	}
-
-	reset() {
-		this.player.currentTime = 0;
-		this.updateProgress();
-		this.container.classList.remove('playing');
-
-		if (this.repeat) {
-			this.play();
-		}
-	}
-
-	format(seconds) {
-		var time = new Date(seconds * 1000).toISOString().substr(11, 8),
-			len = time.length,
-			zeroes = time.slice(0, 2) == '00';
-		if (zeroes) {
-			return time.slice(3, len);
-		}
-		return time;
-	}
-
-	setStyle(element, properties) {
-		var property, css = '';
-		for (property in properties) {if (window.CP.shouldStopExecution(1)){break;}
-			css += property + ': ' + properties[property] + ';';
-		}
-window.CP.exitedLoop(1);
-
-		element.style.cssText += css;
-	}
-
-	createUI() {
-		var _scope = this;
-		var ui = this.createElement('div', {
-			class: 'playr-ui'
-		});
-		var controlsLeft = this.createElement('div', {
-			class: 'playr-controls left'
-		});
-		var panel = this.createElement('div', {
-			class: 'playr-panel'
-		});
-		var progress = this.createElement('div', {
-			class: 'playr-progress'
-		});
-
-		this.titleBox = this.createElement('div', {
-			class: 'playr-filename',
-			html: '<span>'+_scope.fileName+'</span>'
-		});
-
-		this.durationBox = this.createElement('div', {
-			class: 'playr-duration'
-		});
-		this.playButton = this.createElement('button', {
-			class: 'playr-play',
-			type: 'button'
-		});
-		this.progressBar = this.createElement('div', {
-			class: 'playr-progress-bar'
-		});
-		if (this.volumeControls) {
-			ui.classList.add('volume-controls');
-			var controlsRight = this.createElement('div', {
-				class: 'playr-controls right'
-			});
-			var volume = this.createElement('div', {
-				class: 'playr-volume'
+			thePlayer.find( '.' + cssClass.playPause ).on( 'click', function()
+			{
+				if( thePlayer.hasClass( cssClass.playing ) )
+				{
+					$( this ).attr( 'title', params.strPlay ).find( 'a' ).html( params.strPlay );
+					thePlayer.removeClass( cssClass.playing );
+					isSupport ? theAudio.pause() : theAudio.Stop();
+				}
+				else
+				{
+					$( this ).attr( 'title', params.strPause ).find( 'a' ).html( params.strPause );
+					thePlayer.addClass( cssClass.playing );
+					isSupport ? theAudio.play() : theAudio.Play();
+				}
+				return false;
 			});
 
-			this.volumeBar = this.createElement('div', {
-				class: 'playr-volume-box',
-				html: '<span></span>'
-			});
-
-			volume.appendChild(this.volumeBar);
-			controlsRight.appendChild(volume);
-
-			this.volumeBar.addEventListener("mousedown", function(event) {
-				_scope.dragging = true;
-				_scope.adjustVolume(event);
-			}, false);
-
-			window.addEventListener("mousemove", this.adjustVolume.bind(this), false);
-		}
-
-		if (this.seekControls) {
-			ui.classList.add('seek-controls');
-			this.rwButton = this.createElement('button', {
-				class: 'playr-rewind',
-				type: 'button'
-			});
-			controlsLeft.appendChild(this.rwButton);
-
-			this.rwButton.addEventListener("click", this.rewind.bind(this), false);
-		}
-
-		controlsLeft.appendChild(this.playButton);
-
-		if (this.seekControls) {
-			this.ffButton = this.createElement('button', {
-				class: 'playr-fastforward',
-				type: 'button'
-			});
-			controlsLeft.appendChild(this.ffButton);
-
-			this.ffButton.addEventListener("click", this.fastForward.bind(this), false);
-		}
-
-		progress.appendChild(this.progressBar);
-
-		panel.appendChild(progress);
-		panel.appendChild(_scope.titleBox);
-		panel.appendChild(_scope.durationBox);
-
-		ui.appendChild(controlsLeft);
-		ui.appendChild(panel);
-
-		if (this.volumeControls) {
-			ui.appendChild(controlsRight);
-		}
-
-		this.container.appendChild(ui);
-
-		this.setDimensions();
-	}
-
-	createElement(a, b) {
-		var c = document,
-			d = c.createElement(a);
-		if (b && "object" == typeof b) {
-			var e;
-			for (e in b)
-				{if (window.CP.shouldStopExecution(2)){break;}if ("html" === e) d.innerHTML = b[e];
-				else if ("text" === e) {
-				var f = c.createTextNode(b[e]);
-				d.appendChild(f)
-			} else d.setAttribute(e, b[e])
-window.CP.exitedLoop(2);
-}
-		}
-		return d
-	}
-
-	extend(options) {
-		var option;
-		for (option in options) {if (window.CP.shouldStopExecution(3)){break;}
-			this[option] = options[option];
-		}
-window.CP.exitedLoop(3);
-
-	}
-}
-player = new MediaPlayer(document.getElementById('player'));
-player.render({
-	// seekControls: false,
-	// volumeControls: false
-});
-//# sourceURL=pen.js
+			$this.replaceWith( thePlayer );
+		});
+		return this;
+	};
+})( jQuery, window, document );
