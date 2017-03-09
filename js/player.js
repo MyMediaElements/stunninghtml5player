@@ -1,5 +1,7 @@
-/*
-	AUTHOR: Osvaldas Valutis, www.osvaldas.info
+/* 
+Stunning HTML5 Player for Audio Streaming
+AUTHOR: Junaid Khalid
+URL: https://www.mymediaelements.com
 */
 
 
